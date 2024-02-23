@@ -1,15 +1,13 @@
 import { createCompletion, loadModel } from "gpt4all";
-import { Message, ReferencedMessage } from "./types";
+import { Message } from "./types";
 
 import config from "../config.json";
 
 const Discord = require("discord-user-bots"); // no types
 const client = new Discord.Client(config.token);
 
-
-
 (async () => {
-    const model = await loadModel(config.model, { device: "gpu", modelPath: config.model_path, verbose: true });
+    const model = await loadModel(config.model, { device: "cpu", modelPath: config.model_path, verbose: true });
 
     let semaphore = 0;
     const consultModelForResponse = async (message: Message) => {
