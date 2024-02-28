@@ -17,7 +17,8 @@ Here is the defaut config:
 {
     "token": "Discord token",
     "model": "Model, like: gpt4all-falcon-newbpe-q4_0.gguf",
-    "model_path": "Absolute path to your models folder"
+    "model_path": "Absolute path to your models folder",
+    "max_history_length": 10
 }
 ```
 

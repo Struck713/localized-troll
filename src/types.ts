@@ -61,7 +61,13 @@ export interface Message {
   guild_id: string
 }
 
-interface Mention {
+export interface QueuedMessage {
+  channel_id: string;
+  message_id: string;
+  content: string;
+}
+
+export interface Mention {
     username: string,
     public_flags: number,
     member: Member,
