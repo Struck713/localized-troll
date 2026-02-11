@@ -1,8 +1,13 @@
+import { env } from "bun";
 import { Client, Message as DiscordMessage, Intents, TextChannel } from "discord.js";
 import { Ollama } from "ollama";
-import { QueuedMessage } from "./types";
 
-import config from "../config.json";
+interface QueuedMessage {
+    channel_id: string;
+    message_id: string;
+    author_id: string;
+    content: string;
+}
 
 const client = new Client({
     intents: [
@@ -12,40 +17,51 @@ const client = new Client({
     ]
 });
 
-const tag_regex = /<@!?\d+>/g;
 const queue: QueuedMessage[] = [];
 
 (async () => {
 
-    const ollama = new Ollama({
-        host: config.ollama_host
-    });
+    const system_prompt = await Bun.file("./prompts/system.md").text();
+    const ollama = new Ollama({ host: env.OLLAMA_HOST });
 
     let semaphore = 0;
     const consultModelForResponse = async (message: QueuedMessage) => {
-        const content = message.content.replace(tag_regex, "").trim();
+        const content = message.content;
         const channel = await client.channels.fetch(message.channel_id) as TextChannel;
+        console.log(`Processing message ${message.message_id} from channel ${message.channel_id}..`);
         
-        if (!channel || channel.type !== 'GUILD_TEXT') {
+        if (!channel || !channel.isText()) {
             semaphore--;
             return;
         }
         
         await channel.sendTyping();
-        
+
+        const timeLabel = `response_time_${message.message_id}`;
+        console.time(timeLabel);
         const completion = await ollama.chat({
-            model: config.model,
+            model: env.MODEL!,
             messages: [
-                { role: 'system', content: "Your name is Harold. Be as rude as possible." },
+                { 
+                    role: 'system', 
+                    content: system_prompt,
+                },
+                { 
+                    role: 'system', 
+                    content: channel.members
+                        .filter(member => !member.user.bot)
+                        .map(member => `${member.displayName} (<@${member.id}>)`).join(", ") + " are in this channel.",
+                },
+                { 
+                    role: 'system', 
+                    content:  `You are ${client.user?.displayName} (${client.user?.id}). DO NOT reference yourself.`,
+                },
                 { role: 'user', content }
             ]
         });
+        console.timeEnd(timeLabel);
         const response = completion.message.content;
-        if (response) {
-            await channel.send({ content: response, reply: { messageReference: message.message_id } });
-        } else {
-            await channel.send({ content: "Yeah. I got nothing.", reply: { messageReference: message.message_id } });
-        }
+        await channel.send({ content: response, reply: { messageReference: message.message_id } });
         semaphore--;
     }
 
@@ -53,22 +69,18 @@ const queue: QueuedMessage[] = [];
         console.log(`${client.user?.username} is ready to talk nonsense.`);
     });
 
-    client.on('messageCreate', (message: DiscordMessage) => {
-        // Ignore own messages
+    client.on('messageCreate', async (message: DiscordMessage) => {
         if (message.author.id === client.user?.id) return;
         
-        // Check if bot is mentioned
         const isMentioned = message.mentions.has(client.user!.id);
-        
-        // Check if message is a reply to the bot
         const isReplyToBot = message.reference?.messageId && 
                              message.mentions.repliedUser?.id === client.user?.id;
-        
         if (isMentioned || isReplyToBot) {
             queue.push({
                 channel_id: message.channelId,
                 message_id: message.id,
-                content: message.content
+                content: message.content,
+                author_id: message.author.id
             });
         }
     });
@@ -83,6 +95,6 @@ const queue: QueuedMessage[] = [];
         }
     }, 1000);
 
-    await client.login(config.token);
+    await client.login(env.TOKEN);
 
 })();

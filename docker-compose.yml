@@ -1,0 +1,34 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    # Uncomment below if you have a GPU and want to use it
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  bot:
+    build: .
+    container_name: localized-troll
+    depends_on:
+      - ollama
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - TOKEN=${TOKEN}
+      - MODEL=${MODEL}
+      - OLLAMA_HOST=http://ollama:11434
+    volumes:
+      - ./prompts:/app/prompts
+
+volumes:
+  ollama_data:
